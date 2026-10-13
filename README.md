@@ -12,6 +12,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 | `Sources/PdfDib.twin` | DIB de 32 bpp sobre el que PDFium escribe directamente |
 | `Sources/ucPDF.twin` | El control: visor, herramientas, eventos y propiedades |
 | `Sources/ucPdfSupport.twin` | Enumeraciones públicas, subclasificación y diálogo de impresión |
+| `Sources/GdiPlus.twin` | API plana de GDI+ (`gdiplus.dll` de Windows) para la barra de herramientas |
 | `Sources/Win32Api.twin` | Declaraciones Win32 y utilidades |
 | `Sources/PdfTests.twin` | Pruebas automáticas para Win32/Win64 |
 | `samples/sample.pdf` | PDF de 2 páginas que usan las pruebas |
@@ -58,6 +59,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
   - API: `SelectedText`, `HasSelection`, `SelectAll`, `ClearSelection`, `CopySelection`, `GetPageText`.
 - **Búsqueda:**
   - `FindText(texto, MatchCase, WholeWord)`, `FindNext` (F3), `FindPrevious` (Mayús+F3) y `ClearSearch`;
+  - `SearchResultCount` y `SearchResultIndex` dan el total y la posición actual;
   - recorre el documento en círculo, resalta la coincidencia y la desplaza hasta hacerla visible.
 - **Miniaturas:**
   - panel lateral (`ShowThumbnails`, `ThumbnailWidth`) con desplazamiento propio por rueda;
@@ -69,8 +71,8 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
   - el renderizado está limitado a 300 ppp.
 
 ### 4. Integración
-- **Eventos:** `DocumentLoaded`, `DocumentClosed`, `LoadFailed`, `PageChanged`, `ZoomChanged`, `SelectionChanged`, `SearchCompleted`, `PageClick` (coordenadas PDF en puntos), `PrintProgress` (cancelable).
-- **Propiedades de diseño**, guardadas en el PropertyBag: `BackColor`, `ThumbnailBackColor`, `SelectionColor`, `SearchHighlightColor`, `BorderStyle`, `PageGap`, `Zoom`, `ZoomMode`, `Rotation`, `ShowThumbnails`, `ThumbnailWidth`, `CursorMode`, `PdfiumPath`, `FileName` (se abre automáticamente al ejecutar) y `EmptyText`. En diseño se ve una vista previa sin cargar PDFium.
+- **Eventos:** `DocumentLoaded`, `DocumentClosed`, `LoadFailed`, `PageChanged`, `ZoomChanged`, `SelectionChanged`, `SearchCompleted`, `PageClick` (coordenadas PDF en puntos), `PrintProgress` (cancelable), `ToolbarClick` (cancelable).
+- **Propiedades de diseño**, guardadas en el PropertyBag: `BackColor`, `ThumbnailBackColor`, `SelectionColor`, `SearchHighlightColor`, `BorderStyle`, `PageGap`, `Zoom`, `ZoomMode`, `Rotation`, `ShowThumbnails`, `ThumbnailWidth`, `CursorMode`, `PdfiumPath`, `FileName` (se abre automáticamente al ejecutar), `EmptyText` y `ShowToolbar`. En diseño se ve una vista previa sin cargar PDFium.
 - **DPI:**
   - usa `GetDpiForWindow`, con `LOGPIXELSX` como alternativa;
   - atiende `WM_DPICHANGED_AFTERPARENT`;
@@ -85,6 +87,32 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
   - páginas, tamaños y renderizado (color en la posición esperada, mosaico al 400 % y rotación);
   - texto, búsqueda y conversión de coordenadas;
   - códigos de error y recuento de referencias.
+
+## Barra de herramientas
+
+La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
+
+```
+[|<] [<] [ 3 / 10 ] [>] [>|]  |  [-] [ 100 % ] [+]  |  [ Buscar...      ] 2 de 7 [lupa] [v]  |  [miniaturas] [imprimir]
+```
+
+| Grupo | Elementos |
+|---|---|
+| Páginas | Primera, anterior, etiqueta «página / total», siguiente, última |
+| Zoom | `−`, etiqueta con el zoom actual, `+`. Avanza en tramos de 25 % (110 % → 125 % / 100 %) |
+| Búsqueda | Cuadro de texto, contador «n de N» (o «Sin resultados»), botón buscar y botón siguiente |
+| Vista | Mostrar u ocultar las miniaturas (el botón queda resaltado cuando están visibles) |
+| Impresión | Abre el diálogo de impresión |
+
+**Comportamiento:**
+- Los botones se desactivan cuando no tienen efecto (primera página, zoom mínimo, sin documento…) y se resaltan al pasar el ratón.
+- Buscar:
+  - **Intro** o el botón de la lupa lanzan la búsqueda. Si el texto no ha cambiado, pasan a la siguiente coincidencia.
+  - **Mayús+Intro** va a la coincidencia anterior y **Esc** devuelve el foco al visor.
+  - **Ctrl+F** lleva el foco al cuadro de búsqueda.
+- La búsqueda recorre todo el documento y guarda todas las coincidencias, por eso el contador muestra el total.
+- El evento `ToolbarClick(Command, Cancel)` permite interceptar o sustituir cualquier botón.
+- El cuadro de búsqueda es un `EDIT` de Win32 creado como ventana hija.
 
 ## Uso rápido
 
@@ -116,7 +144,8 @@ End Sub
 | ↑ ↓ ← → | Desplazar |
 | RePág / AvPág | Pantalla anterior / siguiente (con Ctrl: página) |
 | Inicio / Fin | Primera / última página |
-| Ctrl + `+` / `-` / `0` | Ampliar / reducir / 100 % |
+| Ctrl + `+` / `-` / `0` | Ampliar / reducir (tramos de 25 %) / 100 % |
+| Ctrl+F | Ir al cuadro de búsqueda |
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
 | F3 / Mayús+F3 | Siguiente / anterior coincidencia |
