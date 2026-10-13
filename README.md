@@ -72,7 +72,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 
 ### 4. Integración
 - **Eventos:** `DocumentLoaded`, `DocumentClosed`, `LoadFailed`, `PageChanged`, `ZoomChanged`, `SelectionChanged`, `SearchCompleted`, `PageClick` (coordenadas PDF en puntos), `PrintProgress` (cancelable), `ToolbarClick` (cancelable).
-- **Propiedades de diseño**, guardadas en el PropertyBag: `BackColor`, `ThumbnailBackColor`, `SelectionColor`, `SearchHighlightColor`, `BorderStyle`, `PageGap`, `Zoom`, `ZoomMode`, `Rotation`, `ShowThumbnails`, `ThumbnailWidth`, `CursorMode`, `PdfiumPath`, `FileName` (se abre automáticamente al ejecutar), `EmptyText` y `ShowToolbar`. En diseño se ve una vista previa sin cargar PDFium.
+- **Propiedades de diseño**, guardadas en el PropertyBag: `BackColor`, `ThumbnailBackColor`, `SelectionColor`, `SearchHighlightColor`, `BorderStyle`, `PageGap`, `Zoom`, `ZoomMode`, `Rotation`, `ShowThumbnails`, `ThumbnailWidth`, `CursorMode`, `PdfiumPath`, `FileName` (se abre automáticamente al ejecutar), `EmptyText` y `ShowToolbar`. En ejecución, también `ShowSearchPanel`. En diseño se ve una vista previa sin cargar PDFium.
 - **DPI:**
   - usa `GetDpiForWindow`, con `LOGPIXELSX` como alternativa;
   - atiende `WM_DPICHANGED_AFTERPARENT`;
@@ -93,26 +93,43 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
 
 ```
-[|<] [<] [ 3 / 10 ] [>] [>|]  |  [-] [ 100 % ] [+]  |  [ Buscar...      ] 2 de 7 [lupa] [v]  |  [miniaturas] [imprimir]
+[miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir]
 ```
 
 | Grupo | Elementos |
 |---|---|
+| Paneles | Miniaturas y búsqueda. Abren un panel a la izquierda; son excluyentes y el botón activo queda resaltado |
 | Páginas | Primera, anterior, etiqueta «página / total», siguiente, última |
-| Zoom | `−`, etiqueta con el zoom actual, `+`. Avanza en tramos de 25 % (110 % → 125 % / 100 %) |
-| Búsqueda | Cuadro de texto, contador «n de N» (o «Sin resultados»), botón buscar y botón siguiente |
-| Vista | Mostrar u ocultar las miniaturas (el botón queda resaltado cuando están visibles) |
+| Zoom | `−`, zoom actual y `+` en tramos de 25 % (110 % → 125 % / 100 %); **ajustar al ancho** y **ajustar página**, resaltados cuando su modo está activo |
 | Impresión | Abre el diálogo de impresión |
 
-**Comportamiento:**
-- Los botones se desactivan cuando no tienen efecto (primera página, zoom mínimo, sin documento…) y se resaltan al pasar el ratón.
-- Buscar:
-  - **Intro** o el botón de la lupa lanzan la búsqueda. Si el texto no ha cambiado, pasan a la siguiente coincidencia.
-  - **Mayús+Intro** va a la coincidencia anterior y **Esc** devuelve el foco al visor.
-  - **Ctrl+F** lleva el foco al cuadro de búsqueda.
-- La búsqueda recorre todo el documento y guarda todas las coincidencias, por eso el contador muestra el total.
-- El evento `ToolbarClick(Command, Cancel)` permite interceptar o sustituir cualquier botón.
-- El cuadro de búsqueda es un `EDIT` de Win32 creado como ventana hija.
+### Panel de búsqueda
+
+```
+┌──────────────────────────────────┐
+│ [ Buscar en el documento...    ] │
+│ Resultados de la búsqueda 2/7 ▲ ▼ │
+└──────────────────────────────────┘
+```
+
+- **Intro** busca. Si el texto no ha cambiado, va a la siguiente coincidencia; **Mayús+Intro** va a la anterior.
+- **▲ / ▼** recorren los resultados en círculo y **Esc** devuelve el foco al visor.
+- **Ctrl+F** abre el panel y pone el foco en el cuadro de búsqueda.
+- La búsqueda recorre todo el documento, por eso muestra el total (`x/x`).
+- El cuadro de texto es un `EDIT` de Win32 creado como ventana hija. El resto del panel se dibuja con GDI+.
+- Propiedad `ShowSearchPanel`. El panel mide como mínimo 260 px lógicos de ancho.
+
+El evento `ToolbarClick(Command, Cancel)` permite interceptar o sustituir cualquier botón, incluidos los del panel.
+
+## Impresión
+
+| Método | Comportamiento |
+|---|---|
+| `PrintDocument(ShowDialog, FromPage, ToPage, DocumentName)` | Muestra el diálogo de impresión estándar (o usa la predeterminada si `ShowDialog = False`) |
+| `PrintToDefaultPrinter(FromPage, ToPage, Copies, DocumentName)` | Envía el documento **directamente** a la impresora predeterminada de Windows, sin diálogos (`GetDefaultPrinterW` + `CreateDCW`) |
+| `DefaultPrinterName()` | Nombre de la impresora predeterminada (`""` si no hay) |
+
+Los dos métodos de impresión ajustan cada página al área imprimible, la centran y giran las apaisadas. El evento `PrintProgress` permite cancelar.
 
 ## Uso rápido
 
@@ -145,7 +162,7 @@ End Sub
 | RePág / AvPág | Pantalla anterior / siguiente (con Ctrl: página) |
 | Inicio / Fin | Primera / última página |
 | Ctrl + `+` / `-` / `0` | Ampliar / reducir (tramos de 25 %) / 100 % |
-| Ctrl+F | Ir al cuadro de búsqueda |
+| Ctrl+F | Abrir el panel de búsqueda |
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
 | F3 / Mayús+F3 | Siguiente / anterior coincidencia |
