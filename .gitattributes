@@ -1,0 +1,3 @@
+*.twin -text
+*.pdf binary
+*.dll binary
