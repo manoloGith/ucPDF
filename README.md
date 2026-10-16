@@ -173,7 +173,7 @@ El botón **Organizar** (después de Imprimir) sustituye la vista por una cuadr�
 ### Botones de edición (cabecera de Organizar)
 
 ```
-Organizar páginas  [↺][↻] | [🗑] | [+□][+📄][⇄] | [⇱][⌗]   2 seleccionada(s) — Ctrl/Mayús para varias   Tamaño ──●──
+Organizar páginas  [↶][↷] | [↺][↻] | [🗑] | [+□][+📄][⇄] | [⇱][⌗]   2 seleccionada(s) — Ctrl/Mayús para varias   Tamaño ──●──
 ```
 
 Todas las acciones se aplican **solo a la selección**, que puede tener una o varias páginas:
@@ -183,6 +183,7 @@ Todas las acciones se aplican **solo a la selección**, que puede tener una o va
 
 | Botón | Método | Acción |
 |---|---|---|
+| Deshacer / Rehacer (Ctrl+Z / Ctrl+Y) | `Undo()`, `Redo()` | **Sin límite de pasos.** Cubre mover, girar, eliminar, insertar, reemplazar y recortar |
 | Girar a la izquierda / derecha | `RotateSelectedPages(Clockwise)` | Gira 90° cada página seleccionada (`/Rotate`) |
 | Eliminar (Supr) | `DeleteSelectedPages(Confirm)` | Pide confirmación. Nunca deja el documento sin páginas; las demás se deslizan a los huecos |
 | Insertar página | `InsertBlankPage()` | Página en blanco, del tamaño de la última seleccionada, **justo después de la selección** |
@@ -190,6 +191,14 @@ Todas las acciones se aplican **solo a la selección**, que puede tener una o va
 | Reemplazar | `ReplaceSelectedPages([FileName])` | Sustituye cada página seleccionada por la página correspondiente del archivo elegido (1ª por 1ª, 2ª por 2ª…) |
 | Extraer | `ExtractSelectedPages([FileName])` | Guarda la selección en un **PDF nuevo**. Propone `<nombre>_paginas.pdf` en la misma carpeta; el documento actual no cambia |
 | Recortar | `CropSelectedPages()` | Abre el **editor de recorte**: se dibuja un rectángulo sobre la primera página seleccionada y se aplica a toda la selección (ver abajo) |
+
+#### Deshacer y rehacer
+
+- **Cómo funciona:** tras cada cambio se guarda una instantánea completa del documento en `%TEMP%`. Como no se guarda en memoria, no hay límite de pasos. Las instantáneas se borran al cerrar el documento o el control.
+- **Animación:** cada página lleva un identificador interno. Al deshacer o rehacer, las páginas que ya existían se deslizan a su posición anterior y conservan la miniatura, y las que reaparecen lo hacen con un destello.
+- **Cambios sin guardar:** el aviso tiene en cuenta el historial. Si deshaces hasta el estado guardado, el documento deja de estar «con cambios sin guardar».
+- **Nuevo cambio tras deshacer:** se descartan los pasos de rehacer, como en cualquier editor.
+- **Por código:** `CanUndo`, `CanRedo`, `UndoCount`, `RedoCount`. El evento `PagesEdited` llega con `pdfOpUndo` / `pdfOpRedo`.
 
 #### Editor de recorte
 
@@ -303,6 +312,7 @@ End Sub
 | Ctrl+F | Abrir el panel de búsqueda |
 | Ctrl+O / Ctrl+S | Abrir / guardar con diálogo (si el botón está visible) |
 | Esc (organizar) | Cancelar el arrastre o salir de organizar |
+| Ctrl+Z / Ctrl+Y (organizar) | Deshacer / rehacer (también Ctrl+Mayús+Z) |
 | Ctrl + rueda (organizar) | Tamaño de las miniaturas |
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
