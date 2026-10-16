@@ -97,7 +97,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
 
 ```
-[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar]
+[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar] [zonas]
 ```
 
 | Grupo | Elementos |
@@ -108,6 +108,7 @@ La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redond
 | Zoom | `−`, zoom actual y `+` en tramos de 25 % (110 % → 125 % / 100 %); **ajustar al ancho** y **ajustar página**, resaltados cuando su modo está activo |
 | Impresión | Abre el diálogo de impresión |
 | Organizar | Vista de miniaturas para reordenar páginas arrastrándolas (ver abajo) |
+| Zonas | Herramienta rectángulo para marcar zonas con nombre y guardarlas en un INI (ver abajo) |
 
 ### Panel de búsqueda
 
@@ -282,6 +283,61 @@ ucPDF1.ShowSaveButton = False     ' ocultar Guardar
 
 Los dos métodos de impresión ajustan cada página al área imprimible, la centran y giran las apaisadas. El evento `PrintProgress` permite cancelar.
 
+## Zonas (rectángulos con nombre)
+
+El botón **Zonas** de la barra (o `AreaMode = True`) activa una herramienta rectángulo y abre el panel **Zonas** a la izquierda.
+
+- **Crear:** arrastra sobre una página. Al soltar se pide el nombre (propone `Zona1`, `Zona2`…). La zona se ajusta a esa página y mide al menos 4 × 4 pt.
+- **Editar:** clic en una zona para seleccionarla y moverla. Se cambia el tamaño con los 8 tiradores, se renombra con doble clic o F2, y se borra con Supr. Las flechas la mueven 1 pt (10 pt con Mayús).
+- **Panel:** muestra el nombre, la página, las coordenadas y el texto que captura cada zona. Clic en una zona de la lista para ir a ella. Botones **Guardar INI**, **Abrir INI** y **Borrar todo**.
+- **Salir:** Esc quita la selección y, si no hay ninguna, sale de la herramienta.
+- **Persistencia:** las zonas se conservan al abrir otro PDF, para aplicar la misma plantilla a varios documentos del mismo tipo.
+
+El INI guarda **una clave por zona: nombre = página, izquierda, arriba, derecha, abajo**.
+- Las medidas van en puntos desde la esquina superior izquierda de la página, con punto decimal.
+- Son exactamente los argumentos de `GetTextInRect`.
+- El archivo se escribe en UTF-16 para admitir cualquier nombre, de modo que también lo lee `GetPrivateProfileStringW`.
+
+```ini
+; Zonas de ucPDF
+[Info]
+Unidades=pt
+Origen=superior-izquierda
+Documento=factura.pdf
+Total=2
+
+[Zonas]
+NumFactura=1,410.50,72.00,560.00,90.25
+Total=1,420.00,680.00,560.00,700.00
+```
+
+```vb
+' Leer una zona del INI y extraer su texto
+Dim v() As String
+v = Split("1,410.50,72.00,560.00,90.25", ",")
+Debug.Print ucPDF1.GetTextInRect(CLng(v(0)), Val(v(1)), Val(v(2)), Val(v(3)), Val(v(4)), "pt")
+
+' O directamente
+ucPDF1.LoadAreasIni "C:\plantillasactura_zonas.ini"
+Debug.Print ucPDF1.GetAreaText("NumFactura")
+Debug.Print ucPDF1.ExtractAreasText()          ' NumFactura=F-2026/0153 ...
+```
+
+> Usa `Val` (no `CDbl`) para leer los números: el INI siempre usa punto decimal, sea cual sea la configuración regional.
+
+| Miembro | Descripción |
+|---|---|
+| `AreaMode` | Activa o desactiva la herramienta |
+| `ShowAreasPanel` | Muestra el panel de zonas sin activar la herramienta |
+| `AreaCount`, `AreaName(i)`, `AreaPage(i)`, `GetAreaRect(i, L, T, R, B)`, `SelectedArea`, `FindArea(nombre)` | Consulta (índice base 0, página base 1) |
+| `AddArea(nombre, página, L, T, R, B, [Units])`, `RemoveArea(nombre)`, `ClearAreas`, `GoToArea(i)` | Edición desde código |
+| `SaveAreasIni(archivo)`, `LoadAreasIni(archivo, [AppendAreas])` | Guardar o cargar el INI |
+| `ShowSaveAreasDialog`, `ShowLoadAreasDialog` | Lo mismo con cuadro de diálogo. Por defecto propone `<pdf>_zonas.ini` en la carpeta del PDF |
+| `GetAreaText(nombre)`, `ExtractAreasText([«ini»\|«tab»])` | Texto de una zona o de todas |
+| Eventos `AreaCreated(ZoneName, Page, L, T, R, B)` y `AreasChanged` | Avisan de los cambios |
+
+Sin interfaz, `PdfOps` ofrece `WriteAreasIni`, `ReadAreasIni` y `AreasText(doc, ini)`. Desde la línea de comandos se usa `areas` (ver más abajo).
+
 ## API completa y línea de comandos
 
 Todas las funciones están en **tres capas**:
@@ -332,6 +388,7 @@ Pon **«Startup object = Sub Main»** en el proyecto.
 programa.exe info      factura.pdf
 programa.exe text      factura.pdf factura.txt --pages 1-2 --encoding utf8
 programa.exe textrect  factura.pdf total.txt --page 1 --rect 120,240,190,252 --units mm
+programa.exe areas     factura.pdf factura_zonas.ini datos.txt --format ini
 programa.exe search    contrato.pdf "importe total" --out resultados.txt
 programa.exe extract   in.pdf out.pdf --pages 1-3,7
 programa.exe delete    in.pdf out.pdf --pages 2,4
@@ -352,7 +409,7 @@ programa.exe help
 **Opciones generales:** `--password`, `--pdfium <ruta>` y `--quiet` (o `-q`, que solo deja salir errores y resultados).
 - **Formatos:** las opciones admiten `--nombre valor` y `--nombre=valor`, y las rutas con espacios van entre comillas.
 - **Archivo de salida:** puede ser el mismo de entrada, porque el PDF se lee entero a memoria antes de escribir.
-- **Sin archivo de salida:** en `text`, `textrect` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
+- **Sin archivo de salida:** en `text`, `textrect`, `areas` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
 
 **Códigos de salida:**
 
@@ -363,7 +420,7 @@ programa.exe help
 | 2 | No se pudo abrir un archivo |
 | 3 | La operación falló |
 | 4 | PDFium no disponible |
-| 5 | Sin resultados (`search`) |
+| 5 | Sin resultados (`search`) o INI sin zonas (`areas`) |
 
 > Si el EXE es de subsistema Windows (lo normal en twinBASIC), CMD no espera a que termine. Para ver la salida y el código usa `start /wait programa.exe …` o compílalo como aplicación de consola. Desde un `.bat`, PowerShell o un programa que lo lance y espere, funciona directamente.
 
@@ -406,3 +463,4 @@ End Sub
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
 | F3 / Mayús+F3 | Siguiente / anterior coincidencia |
+| Supr / F2 / Esc / flechas (zonas) | Borrar, renombrar, deseleccionar o salir, mover 1 pt (10 con Mayús) |
