@@ -93,7 +93,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
 
 ```
-[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir]
+[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar]
 ```
 
 | Grupo | Elementos |
@@ -103,6 +103,7 @@ La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redond
 | Páginas | Primera, anterior, etiqueta «página / total», siguiente, última |
 | Zoom | `−`, zoom actual y `+` en tramos de 25 % (110 % → 125 % / 100 %); **ajustar al ancho** y **ajustar página**, resaltados cuando su modo está activo |
 | Impresión | Abre el diálogo de impresión |
+| Organizar | Vista de miniaturas para reordenar páginas arrastrándolas (ver abajo) |
 
 ### Panel de búsqueda
 
@@ -133,6 +134,55 @@ La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redond
 - Propiedad `ShowSearchPanel`. El panel mide como mínimo 260 px lógicos de ancho.
 
 El evento `ToolbarClick(Command, Cancel)` permite interceptar o sustituir cualquier botón, incluidos los del panel.
+
+Al abrir un PDF **no se muestra ningún panel**: ni miniaturas ni búsqueda. Se abren con sus botones.
+
+## Organizar páginas
+
+El botón **Organizar** (después de Imprimir) sustituye la vista por una cuadrícula de miniaturas:
+
+```
+┌ Organizar páginas — arrastra una miniatura…   ● Cambios sin guardar   Tamaño ──●──── ┐
+│  ┌───┐   ┌───┐  ┊┌┄┄┄┐  ┌───┐                                                         │
+│  │ 1 │   │ 2 │  ┊┊   ┊  │ 4 │      ← hueco punteado y barra: dónde quedará la página   │
+│  └───┘   └───┘  ┊└┄┄┄┘  └───┘                                                         │
+│                        ╔═══╗                                                          │
+│                        ║ 3 ║  ← página arrastrada: ampliada, translúcida, con sombra   │
+│                        ╚═══╝                                                          │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Arrastrar páginas:**
+- Se arrastra una miniatura para cambiar su posición; por ejemplo, poner la segunda delante de la primera.
+- **Efecto óptico:**
+  - la página arrastrada se ve un 6 % más grande, translúcida, con sombra y borde de color;
+  - el resto de miniaturas se desliza con animación suavizada para dejar libre la casilla de destino;
+  - esa casilla se marca con un recuadro punteado y una barra de inserción.
+- Al soltar, la página vuela a su sitio y destella brevemente. Cerca de los bordes, la vista se desplaza sola.
+- La vista previa coincide siempre con el orden final; lo he comprobado para todas las combinaciones de hasta 6 páginas.
+
+**Controles:**
+- **Tamaño:** control deslizante en la cabecera o Ctrl+rueda, de 80 a 360 px lógicos (`OrganizeThumbSize`). Al cambiar el ancho, la cuadrícula se recoloca con animación.
+- Clic para seleccionar una página; doble clic para volver a la vista normal en esa página.
+- Esc cancela el arrastre o sale del modo organizar.
+
+**Cambios en el documento:**
+- Al soltar se reordena el PDF real con `FPDF_MovePages`. El documento queda **con cambios sin guardar** (`Modified = True`) y se lanza `PagesReordered(FromPage, ToPage)`.
+- Al guardar, PDFium genera un PDF nuevo (`FPDF_SaveAsCopy`) con el nuevo orden.
+
+### Aviso de cambios sin guardar
+
+Si hay cambios sin guardar, el control pregunta **Sí / No / Cancelar** antes de perderlos:
+- al **cerrar la ventana principal**: el control intercepta `WM_CLOSE` y `WM_QUERYENDSESSION`, y Cancelar impide el cierre. Se desactiva con `ConfirmSaveOnClose = False`;
+- al abrir otro PDF con el botón Abrir.
+
+«Sí» abre el diálogo de guardar; si se cancela ese diálogo, tampoco se continúa. Desde código se puede usar `ConfirmSaveChanges()`, que devuelve `True` si se puede continuar. Por ejemplo, si el formulario se descarga con `Unload` en vez de cerrarse:
+
+```vb
+Private Sub Form_QueryUnload(Cancel As Integer, UnloadMode As Integer)
+    If UnloadMode <> vbFormControlMenu Then Cancel = Not ucPDF1.ConfirmSaveChanges()
+End Sub
+```
 
 ## Abrir y guardar
 
@@ -196,6 +246,8 @@ End Sub
 | Ctrl + `+` / `-` / `0` | Ampliar / reducir (tramos de 25 %) / 100 % |
 | Ctrl+F | Abrir el panel de búsqueda |
 | Ctrl+O / Ctrl+S | Abrir / guardar con diálogo (si el botón está visible) |
+| Esc (organizar) | Cancelar el arrastre o salir de organizar |
+| Ctrl + rueda (organizar) | Tamaño de las miniaturas |
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
 | F3 / Mayús+F3 | Siguiente / anterior coincidencia |
