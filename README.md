@@ -32,6 +32,8 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 4. Crea un UserControl llamado **`ucPDF`** (*Project → Add → UserControl*). Conserva los atributos que genera el IDE (`[FormDesignerId]`, `[ClassId]`, …) y sustituye el resto por el contenido de `Sources/ucPDF.twin`.
 5. Para que el DPI sea correcto, activa *DPI awareness* (Per-Monitor V2) en el manifiesto del proyecto.
 
+> **Convención de llamada (Win32):** todas las funciones de PDFium se declaran `CDecl`. La cabecera `fpdfview.h` solo usa `__stdcall` si se compila con `FPDFSDK_EXPORTS`, y los binarios de bblanchon no lo definen. Declararlas `stdcall` descuadra la pila en 32 bits y provoca `ACCESS_VIOLATION` aleatorios. En 64 bits no hay diferencia.
+
 ## Los cuatro apartados
 
 ### 1. Base funcional
