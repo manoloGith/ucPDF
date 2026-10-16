@@ -72,7 +72,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 
 ### 4. Integración
 - **Eventos:** `DocumentLoaded`, `DocumentClosed`, `LoadFailed`, `PageChanged`, `ZoomChanged`, `SelectionChanged`, `SearchCompleted`, `PageClick` (coordenadas PDF en puntos), `PrintProgress` (cancelable), `ToolbarClick` (cancelable).
-- **Propiedades de diseño**, guardadas en el PropertyBag: `BackColor`, `ThumbnailBackColor`, `SelectionColor`, `SearchHighlightColor`, `BorderStyle`, `PageGap`, `Zoom`, `ZoomMode`, `Rotation`, `ShowThumbnails`, `ThumbnailWidth`, `CursorMode`, `PdfiumPath`, `FileName` (se abre automáticamente al ejecutar), `EmptyText` y `ShowToolbar`. En ejecución, también `ShowSearchPanel`. En diseño se ve una vista previa sin cargar PDFium.
+- **Propiedades de diseño**, guardadas en el PropertyBag: `BackColor`, `ThumbnailBackColor`, `SelectionColor`, `SearchHighlightColor`, `BorderStyle`, `PageGap`, `Zoom`, `ZoomMode`, `Rotation`, `ShowThumbnails`, `ThumbnailWidth`, `CursorMode`, `PdfiumPath`, `FileName` (se abre automáticamente al ejecutar), `EmptyText`, `ShowToolbar`, `ShowOpenButton` y `ShowSaveButton`. En ejecución, también `ShowSearchPanel`. En diseño se ve una vista previa sin cargar PDFium.
 - **DPI:**
   - usa `GetDpiForWindow`, con `LOGPIXELSX` como alternativa;
   - atiende `WM_DPICHANGED_AFTERPARENT`;
@@ -93,11 +93,12 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
 
 ```
-[miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir]
+[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir]
 ```
 
 | Grupo | Elementos |
 |---|---|
+| Archivo | **Abrir** y **Guardar** con el cuadro de diálogo de Windows. Se ocultan desde código con `ShowOpenButton` / `ShowSaveButton` |
 | Paneles | Miniaturas y búsqueda. Abren un panel a la izquierda; son excluyentes y el botón activo queda resaltado |
 | Páginas | Primera, anterior, etiqueta «página / total», siguiente, última |
 | Zoom | `−`, zoom actual y `+` en tramos de 25 % (110 % → 125 % / 100 %); **ajustar al ancho** y **ajustar página**, resaltados cuando su modo está activo |
@@ -132,6 +133,25 @@ La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redond
 - Propiedad `ShowSearchPanel`. El panel mide como mínimo 260 px lógicos de ancho.
 
 El evento `ToolbarClick(Command, Cancel)` permite interceptar o sustituir cualquier botón, incluidos los del panel.
+
+## Abrir y guardar
+
+| Miembro | Comportamiento |
+|---|---|
+| `ShowOpenDialog()` | Diálogo **Abrir** (filtro `*.pdf`). Empieza en la carpeta del documento actual o en la última usada. Devuelve `True` si se cargó el PDF (Ctrl+O) |
+| `ShowSaveDialog()` | Diálogo **Guardar como**. Propone **la carpeta de donde se abrió y el mismo nombre de archivo**, y pide confirmación antes de sobrescribir (Ctrl+S) |
+| `SaveAs(FileName)` | Guarda sin diálogo una copia exacta del PDF abierto. A partir de ahí, `FileName` apunta a la nueva ruta |
+| `ShowOpenButton`, `ShowSaveButton` | Muestran u ocultan los botones de la barra. El separador desaparece si se ocultan los dos |
+| Evento `DocumentSaved(FileName)` | Se lanza después de guardar |
+
+**Detalles:**
+- Se guardan los bytes originales que el control mantiene en memoria. Por eso se puede sobrescribir el mismo archivo del que se abrió y se admiten rutas Unicode.
+- Los diálogos son los estándar de Windows (`GetOpenFileNameW` / `GetSaveFileNameW` de `comdlg32`, sin dependencias externas).
+
+```vb
+ucPDF1.ShowOpenButton = False     ' ocultar Abrir
+ucPDF1.ShowSaveButton = False     ' ocultar Guardar
+```
 
 ## Impresión
 
@@ -175,6 +195,7 @@ End Sub
 | Inicio / Fin | Primera / última página |
 | Ctrl + `+` / `-` / `0` | Ampliar / reducir (tramos de 25 %) / 100 % |
 | Ctrl+F | Abrir el panel de búsqueda |
+| Ctrl+O / Ctrl+S | Abrir / guardar con diálogo (si el botón está visible) |
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
 | F3 / Mayús+F3 | Siguiente / anterior coincidencia |
