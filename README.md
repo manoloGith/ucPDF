@@ -106,11 +106,23 @@ La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redond
 ### Panel de búsqueda
 
 ```
-┌──────────────────────────────────┐
-│ [ Buscar en el documento...    ] │
-│ Resultados de la búsqueda 2/7 ▲ ▼ │
-└──────────────────────────────────┘
+┌───────────────────────────────────────┐
+│ [ Buscar en el documento...         ] │  ← EDIT con fondo blanco
+│ Resultados de la búsqueda 2/7    ▲ ▼  │
+│ ┌───────────────────────────────────┐ │
+│ │ Página 1                          │ │
+│ │ Hola uc[PDF] - pagina 1 Documen…  │ │  ← resultado actual resaltado
+│ ├───────────────────────────────────┤ │
+│ │ Página 2                          │ │
+│ │ …Busqueda: uc[PDF] aparece aqui…  │ │
+│ └───────────────────────────────────┘ │
+└───────────────────────────────────────┘
 ```
+
+- Debajo del cuadro de texto aparece la **lista de resultados**. Cada elemento muestra la página y un extracto: unos 24 caracteres antes y 70 después, empezando en una palabra completa. El texto encontrado va en negrita sobre el color `SearchHighlightColor`.
+- Un clic en un resultado salta a esa coincidencia. El resultado actual queda resaltado y la lista lo mantiene a la vista al usar ▲ / ▼, Intro o F3.
+- La lista se desplaza con la rueda del ratón y muestra un indicador de posición. Solo se dibujan los elementos visibles, así que admite miles de resultados.
+- Método `SelectSearchResult(Index)` (base 0) para ir a un resultado desde código.
 
 - **Intro** busca. Si el texto no ha cambiado, va a la siguiente coincidencia; **Mayús+Intro** va a la anterior.
 - **▲ / ▼** recorren los resultados en círculo y **Esc** devuelve el foco al visor.
