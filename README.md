@@ -170,6 +170,32 @@ El botón **Organizar** (después de Imprimir) sustituye la vista por una cuadr�
 - Al soltar se reordena el PDF real con `FPDF_MovePages`. El documento queda **con cambios sin guardar** (`Modified = True`) y se lanza `PagesReordered(FromPage, ToPage)`.
 - Al guardar, PDFium genera un PDF nuevo (`FPDF_SaveAsCopy`) con el nuevo orden.
 
+### Botones de edición (cabecera de Organizar)
+
+```
+Organizar páginas  [↺][↻] | [🗑] | [+□][+📄][⇄] | [⇱][⌗]   2 seleccionada(s) — Ctrl/Mayús para varias   Tamaño ──●──
+```
+
+Todas las acciones se aplican **solo a la selección**, que puede tener una o varias páginas:
+- **Selección:** clic selecciona una página, **Ctrl+clic** añade o quita, **Mayús+clic** selecciona un intervalo, **Ctrl+A** todas, y un clic en un hueco vacío la anula.
+- **Información:** al dejar el ratón sobre cualquier botón aparece una descripción.
+- **Si no caben:** los botones que no caben en la cabecera se ocultan, pero las acciones siguen disponibles por código.
+
+| Botón | Método | Acción |
+|---|---|---|
+| Girar a la izquierda / derecha | `RotateSelectedPages(Clockwise)` | Gira 90° cada página seleccionada (`/Rotate`) |
+| Eliminar (Supr) | `DeleteSelectedPages(Confirm)` | Pide confirmación. Nunca deja el documento sin páginas; las demás se deslizan a los huecos |
+| Insertar página | `InsertBlankPage()` | Página en blanco, del tamaño de la última seleccionada, **justo después de la selección** |
+| Insertar desde archivo | `InsertPagesFromFile([FileName])` | Elige un PDF e inserta todas sus páginas después de la selección |
+| Reemplazar | `ReplaceSelectedPages([FileName])` | Sustituye cada página seleccionada por la página correspondiente del archivo elegido (1ª por 1ª, 2ª por 2ª…) |
+| Extraer | `ExtractSelectedPages([FileName])` | Guarda la selección en un **PDF nuevo**. Propone `<nombre>_paginas.pdf` en la misma carpeta; el documento actual no cambia |
+| Recortar | `CropSelectedPages([MarginPt])` | Recorta los márgenes en blanco: busca el contenido y ajusta la `CropBox` dejando 8 pt de margen |
+
+**Comportamiento común:**
+- Tras cada cambio, las miniaturas se recolocan con animación y las páginas nuevas aparecen con un destello.
+- El documento queda con cambios sin guardar y se lanza `PagesEdited(Operation, FirstPage, Count)`. Extraer lanza `PagesExtracted(FileName, Count)`.
+- `SelectedPages` devuelve la selección como texto (`"1,3,4"`). Fuera del modo organizar, los métodos actúan sobre la página actual.
+
 ### Aviso de cambios sin guardar
 
 Si hay cambios sin guardar, el control pregunta **Sí / No / Cancelar** antes de perderlos:
