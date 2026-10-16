@@ -100,7 +100,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
 
 ```
-[abrir] [guardar] | [miniaturas] [marcadores] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar] [zonas] [formulario]
+[abrir] [guardar] | [miniaturas] [marcadores] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [resaltar] [tachar] [comentario] | [imprimir] [organizar] [zonas] [formulario]
 ```
 
 | Grupo | Elementos |
@@ -109,6 +109,7 @@ La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redond
 | Paneles | Miniaturas, marcadores y búsqueda. Abren un panel a la izquierda; son excluyentes y el botón activo queda resaltado |
 | Páginas | Primera, anterior, etiqueta «página / total», siguiente, última |
 | Zoom | `−`, zoom actual y `+` en tramos de 25 % (110 % → 125 % / 100 %); **ajustar al ancho** y **ajustar página**, resaltados cuando su modo está activo |
+| Anotaciones | Resaltar, tachar y comentar (ver abajo) |
 | Impresión | Abre el diálogo de impresión |
 | Organizar | Vista de miniaturas para reordenar páginas arrastrándolas (ver abajo) |
 | Zonas | Herramienta rectángulo para marcar zonas con nombre y guardarlas en un INI (ver abajo) |
@@ -342,6 +343,36 @@ Debug.Print ucPDF1.ExtractAreasText()          ' NumFactura=F-2026/0153 ...
 
 Sin interfaz, `PdfOps` ofrece `WriteAreasIni`, `ReadAreasIni` y `AreasText(doc, ini)`. Desde la línea de comandos se usa `areas` (ver más abajo).
 
+## Resaltado, tachado y comentarios
+
+Hay tres botones en la barra, entre el zoom y la impresión:
+
+| Botón | Uso |
+|---|---|
+| **Resaltar** | Con texto seleccionado, lo resalta al momento. Sin selección, activa la herramienta: cada texto que selecciones después queda resaltado, hasta que vuelvas a pulsar el botón o Esc |
+| **Tachar** | Igual, pero tacha el texto |
+| **Comentario** | Haz clic en la página, escribe el texto y queda una nota (el icono de globo). La herramienta se desactiva tras colocar la nota |
+
+- **Ver el texto:** al pasar el ratón sobre una anotación con texto aparece un globo con el autor y el comentario.
+- **Seleccionar:** clic en una nota, o un clic sin arrastrar sobre un resaltado o un tachado. La selección se muestra con un marco discontinuo.
+- **Editar y borrar:** doble clic edita el texto de cualquier anotación; Supr borra la seleccionada.
+- **Historial:** todo se puede deshacer con Ctrl+Z.
+- **Guardar:** las anotaciones se guardan en el PDF como anotaciones estándar (`/Highlight`, `/StrikeOut`, `/Text`) con autor y fecha. Acrobat y los demás visores las muestran y las editan.
+- **Dibujo:** PDFium genera su apariencia.
+- **Selección de varias líneas o páginas:** se crea una anotación por página, con un cuadrilátero por línea de texto.
+
+| Miembro | Descripción |
+|---|---|
+| `AnnotTool` | Herramienta activa: `pdfAnnotNone`, `pdfAnnotHighlight`, `pdfAnnotStrikeout`, `pdfAnnotComment` |
+| `HighlightSelection([Comentario])`, `StrikeoutSelection([Comentario])` | Marcan la selección actual |
+| `AddComment(Página, Izquierda, Arriba, Texto)` | Nota en puntos desde la esquina superior izquierda (página base 1) |
+| `AnnotationCount(Página)`, `AnnotationType(Página, i)`, `GetAnnotationText`, `SetAnnotationText`, `DeleteAnnotation`, `DeleteSelectedAnnotation` | Consulta y edición (índice base 0 dentro de la página) |
+| `AnnotationsText()` | Lista: `Página⇥Tipo⇥Autor⇥Texto` |
+| `HighlightColor`, `StrikeoutColor`, `CommentColor`, `AnnotationAuthor` | Colores y autor de las anotaciones nuevas (también en diseño; autor por defecto: el usuario de Windows) |
+| Evento `AnnotationsChanged(Página)` | Se ha añadido, cambiado o borrado una anotación |
+
+Sin interfaz, `PdfDocument` ofrece `AddTextMarkup`, `AddNote`, `AddNoteTopLeft`, `AnnotCount`, `AnnotSubtype`, `AnnotString`, `SetAnnotContents`, `AnnotAtPoint` y `RemoveAnnot`. `PdfOps` ofrece `AnnotationsReport` y `MarkupSearch`, que resalta todas las apariciones de un texto.
+
 ## Marcadores
 
 El botón **Marcadores**, junto al de miniaturas (o `ShowBookmarksPanel = True`), abre el esquema del documento en el panel izquierdo:
@@ -486,6 +517,9 @@ programa.exe text      factura.pdf factura.txt --pages 1-2 --encoding utf8
 programa.exe textrect  factura.pdf total.txt --page 1 --rect 120,240,190,252 --units mm
 programa.exe areas     factura.pdf factura_zonas.ini datos.txt --format ini
 programa.exe bookmarks  manual.pdf indice.txt
+programa.exe highlight  contrato.pdf revisado.pdf "importe total" --comment "Revisar"
+programa.exe highlight  contrato.pdf revisado.pdf "cláusula 7" --strike --color FF0000
+programa.exe annots     revisado.pdf anotaciones.txt
 programa.exe fields     solicitud.pdf campos.txt
 programa.exe formexport solicitud_rellena.pdf datos.xfdf
 programa.exe formimport solicitud.pdf datos.ini rellena.pdf --flatten
@@ -511,7 +545,7 @@ programa.exe help
 **Opciones generales:** `--password`, `--pdfium <ruta>` y `--quiet` (o `-q`, que solo deja salir errores y resultados).
 - **Formatos:** las opciones admiten `--nombre valor` y `--nombre=valor`, y las rutas con espacios van entre comillas.
 - **Archivo de salida:** puede ser el mismo de entrada, porque el PDF se lee entero a memoria antes de escribir.
-- **Sin archivo de salida:** en `text`, `textrect`, `areas`, `bookmarks`, `fields` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
+- **Sin archivo de salida:** en `text`, `textrect`, `areas`, `bookmarks`, `annots`, `fields` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
 
 **Códigos de salida:**
 
@@ -522,7 +556,7 @@ programa.exe help
 | 2 | No se pudo abrir un archivo |
 | 3 | La operación falló |
 | 4 | PDFium no disponible |
-| 5 | Sin resultados (`search`), INI sin zonas (`areas`), PDF sin marcadores (`bookmarks`), PDF sin formulario o ningún campo asignado (`fields`, `formexport`, `formimport`, `fill`) |
+| 5 | Sin resultados (`search`), INI sin zonas (`areas`), PDF sin marcadores (`bookmarks`) o sin anotaciones (`annots`), texto no encontrado (`highlight`), PDF sin formulario o ningún campo asignado (`fields`, `formexport`, `formimport`, `fill`) |
 
 > Si el EXE es de subsistema Windows (lo normal en twinBASIC), CMD no espera a que termine. Para ver la salida y el código usa `start /wait programa.exe …` o compílalo como aplicación de consola. Desde un `.bat`, PowerShell o un programa que lo lance y espere, funciona directamente.
 
@@ -565,6 +599,7 @@ End Sub
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
 | F3 / Mayús+F3 | Siguiente / anterior coincidencia |
+| Supr / Esc (anotación seleccionada) | Borrar / quitar la selección; Esc también desactiva Resaltar, Tachar o Comentario |
 | Tab / Mayús+Tab (formulario) | Campo siguiente / anterior |
 | Intro / Esc (formulario) | Confirmar el campo (Intro en multilínea: salto de línea) |
 | Ctrl+Z / Ctrl+Y (vista normal) | Deshacer / rehacer cambios del formulario |
