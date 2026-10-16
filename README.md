@@ -13,6 +13,8 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 | `Sources/ucPDF.twin` | El control: visor, herramientas, eventos y propiedades |
 | `Sources/ucPdfSupport.twin` | Enumeraciones públicas, subclasificación y diálogo de impresión |
 | `Sources/GdiPlus.twin` | API plana de GDI+ (`gdiplus.dll` de Windows) para la barra de herramientas |
+| `Sources/PdfOps.twin` | Operaciones sin interfaz: texto, coordenadas, búsqueda, páginas, imágenes, unir, dividir, imprimir |
+| `Sources/modCommandLine.twin` | `Sub Main` y comandos de línea de comandos |
 | `Sources/Win32Api.twin` | Declaraciones Win32 y utilidades |
 | `Sources/PdfTests.twin` | Pruebas automáticas para Win32/Win64 |
 | `samples/sample.pdf` | PDF de 2 páginas que usan las pruebas |
@@ -279,6 +281,91 @@ ucPDF1.ShowSaveButton = False     ' ocultar Guardar
 | `DefaultPrinterName()` | Nombre de la impresora predeterminada (`""` si no hay) |
 
 Los dos métodos de impresión ajustan cada página al área imprimible, la centran y giran las apaisadas. El evento `PrintProgress` permite cancelar.
+
+## API completa y línea de comandos
+
+Todas las funciones están en **tres capas**:
+
+| Capa | Archivo | Para qué |
+|---|---|---|
+| Motor sin interfaz | `PdfOps.twin` + `PdfDocument.twin` | Operaciones sobre un `PdfDocument` o sobre rutas, sin formulario |
+| Control | `ucPDF` (métodos públicos) | Lo mismo sobre el documento abierto, con deshacer/rehacer y la vista actualizada |
+| Línea de comandos | `modCommandLine.twin` (`Sub Main`) | Ejecutar el programa anfitrión desde CMD, scripts o tareas programadas |
+
+**Rangos de páginas** (base 1): `all`, `1-3,5`, `8-`, `-4`, `last`, `3-last`, `odd`, `even`. También en español: `todas`, `ultima`, `impares`, `pares`.
+
+**Coordenadas:** se miden desde la esquina superior izquierda de la página tal como se ve, ya girada y recortada. Unidades: `pt` (1/72"), `mm`, `cm`, `in` o `%` del ancho o alto.
+
+### Métodos del control
+
+| Texto y consulta | Páginas | Salida |
+|---|---|---|
+| `GetDocumentText([Pages], [Separator])` | `ExtractPagesTo(Pages, File)` | `ExportPageImage(Page, File, [Dpi], [Quality])` |
+| `ExportText(File, [Pages], [Encoding], [Separator])` | `DeletePages(Pages)` | `ExportPagesToImages(Pages, Pattern, [Dpi])` |
+| `GetTextInRect(Page, L, T, R, B, [Units])` | `RotatePages(Pages, Angle)` | `PrintPagesTo([Pages], [Printer], [Copies])` |
+| `ExportTextInRect(File, Page, L, T, R, B, …)` | `MovePage(From, To)` | `SplitTo(Folder, [Every], [BaseName])` |
+| `SearchAll(Text, [MatchCase], [WholeWord], [Count])` | `InsertBlankPageAfter(After, [W], [H])` | `MergePdfFiles(Files(), OutFile)` |
+| `GetDocumentInfo()`, `GetMetadata(Tag)` | `InsertFileAfter(File, After)` | `SaveAs(File)` |
+| | `ReplacePagesFromFile(Pages, File)` | `RunCommand(CommandLine, [Output])` |
+| | `CropPages(Pages, L, T, R, B, [Units])`, `CropPagesAuto(Pages)` | |
+
+**Comportamiento:**
+- Las ediciones pasan por el historial (deshacer/rehacer) y no muestran mensajes; si algo falla, el motivo queda en `LastOperationError`.
+- `Encoding` del texto: `utf8` (con BOM), `utf8nobom`, `utf16` o `ansi`.
+- `Separator`: `ff` (salto de página, como `pdftotext`), `header` (`===== Página N =====`) o `none`.
+
+```vb
+ucPDF1.ExportText "C:\salida\todo.txt"
+Debug.Print ucPDF1.GetTextInRect(1, 20, 30, 100, 45, "mm")   ' zona de la página 1
+ucPDF1.DeletePages "2,4-5"
+ucPDF1.ExtractPagesTo "1-3", "C:\salida\primeras.pdf"
+ucPDF1.ExportPagesToImages "all", "C:\salida\pag_{n}.png", 200
+```
+
+### Línea de comandos
+
+Pon **«Startup object = Sub Main»** en el proyecto.
+- **Sin argumentos:** se abre `Form1`. Cambia ese nombre en `modCommandLine.Main` si tu formulario se llama de otra forma.
+- **Con argumentos:** se ejecuta el comando y el programa termina con un código de salida.
+
+```
+programa.exe info      factura.pdf
+programa.exe text      factura.pdf factura.txt --pages 1-2 --encoding utf8
+programa.exe textrect  factura.pdf total.txt --page 1 --rect 120,240,190,252 --units mm
+programa.exe search    contrato.pdf "importe total" --out resultados.txt
+programa.exe extract   in.pdf out.pdf --pages 1-3,7
+programa.exe delete    in.pdf out.pdf --pages 2,4
+programa.exe rotate    in.pdf out.pdf --pages odd --angle 90
+programa.exe move      in.pdf out.pdf --page 5 --to 1
+programa.exe insertblank in.pdf out.pdf --after 2 --size 210x297 --units mm
+programa.exe insert    in.pdf out.pdf --from anexo.pdf --after last
+programa.exe replace   in.pdf out.pdf --from nuevas.pdf --pages 3-4
+programa.exe crop      in.pdf out.pdf --pages all --rect 10,10,200,287 --units mm
+programa.exe crop      in.pdf out.pdf --auto --margin 12
+programa.exe merge     total.pdf a.pdf b.pdf c.pdf
+programa.exe split     in.pdf C:\partes --every 5
+programa.exe image     in.pdf C:\img\pag_{n}.png --pages all --dpi 200
+programa.exe print     in.pdf --printer "HP LaserJet" --pages 1-2 --copies 2
+programa.exe help
+```
+
+**Opciones generales:** `--password`, `--pdfium <ruta>` y `--quiet` (o `-q`, que solo deja salir errores y resultados).
+- **Formatos:** las opciones admiten `--nombre valor` y `--nombre=valor`, y las rutas con espacios van entre comillas.
+- **Archivo de salida:** puede ser el mismo de entrada, porque el PDF se lee entero a memoria antes de escribir.
+- **Sin archivo de salida:** en `text`, `textrect` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
+
+**Códigos de salida:**
+
+| Código | Significado |
+|---|---|
+| 0 | Correcto |
+| 1 | Uso incorrecto |
+| 2 | No se pudo abrir un archivo |
+| 3 | La operación falló |
+| 4 | PDFium no disponible |
+| 5 | Sin resultados (`search`) |
+
+> Si el EXE es de subsistema Windows (lo normal en twinBASIC), CMD no espera a que termine. Para ver la salida y el código usa `start /wait programa.exe …` o compílalo como aplicación de consola. Desde un `.bat`, PowerShell o un programa que lo lance y espere, funciona directamente.
 
 ## Uso rápido
 
