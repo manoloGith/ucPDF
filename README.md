@@ -189,7 +189,37 @@ Todas las acciones se aplican **solo a la selección**, que puede tener una o va
 | Insertar desde archivo | `InsertPagesFromFile([FileName])` | Elige un PDF e inserta todas sus páginas después de la selección |
 | Reemplazar | `ReplaceSelectedPages([FileName])` | Sustituye cada página seleccionada por la página correspondiente del archivo elegido (1ª por 1ª, 2ª por 2ª…) |
 | Extraer | `ExtractSelectedPages([FileName])` | Guarda la selección en un **PDF nuevo**. Propone `<nombre>_paginas.pdf` en la misma carpeta; el documento actual no cambia |
-| Recortar | `CropSelectedPages([MarginPt])` | Recorta los márgenes en blanco: busca el contenido y ajusta la `CropBox` dejando 8 pt de margen |
+| Recortar | `CropSelectedPages()` | Abre el **editor de recorte**: se dibuja un rectángulo sobre la primera página seleccionada y se aplica a toda la selección (ver abajo) |
+
+#### Editor de recorte
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │  ░ = zona que se descarta (oscurecida)
+│ ░░░░░ ■━━━━━━━━━━━━■━━━━━━━━━━━━■ ░░░░░░░░░░░░░░░░░░░░ │
+│ ░░░░░ ┃     ┊           ┊        ┃ ░░░░░░░░░░░░░░░░░░░ │  ■ = tiradores (esquinas y lados)
+│ ░░░░░ ■ ┄┄┄┄┼┄┄┄┄┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄ ■ ░░░░░░░░░░░░░░░░░░░ │  ┊ = guías de tercios
+│ ░░░░░ ┃     ┊           ┊        ┃ ░░░░░░░░░░░░░░░░░░░ │
+│ ░░░░░ ■━━━━━━━━━━━━■━━━━━━━━━━━━■ ░░░░░░░░░░░░░░░░░░░░ │
+├──────────────────────────────────────────────────────────┤
+│ Dibuja o ajusta el rectángulo — 70 x 53 mm — se aplicará a 3 página(s)   [Ajustar al contenido] [Cancelar] [Recortar] │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Manejo:**
+- Se abre con el rectángulo ya ajustado al contenido de la página, con 8 pt de margen.
+- Arrastrar fuera del rectángulo dibuja uno nuevo, arrastrar dentro lo mueve, y los ocho tiradores cambian su tamaño. El cursor cambia según la zona.
+- La barra inferior muestra el tamaño resultante en milímetros y a cuántas páginas se aplicará.
+- **Recortar** (o Intro) aplica el rectángulo y **Cancelar** (o Esc) cierra sin cambios.
+
+**Cómo se aplica:**
+- El rectángulo se guarda **en proporción a la página**, así que en páginas de distinto tamaño recorta la misma zona relativa.
+- Se tiene en cuenta el giro y cualquier recorte anterior de cada página.
+
+**Por código:**
+- `CropSelectedPagesMargins(LeftPt, TopPt, RightPt, BottomPt)` recorta por márgenes en puntos.
+- `CropSelectedPagesAuto(MarginPt)` hace el recorte automático al contenido.
+- `ApplyCrop`, `CancelCrop` y `CropEditorActive` controlan el editor.
 
 **Comportamiento común:**
 - Tras cada cambio, las miniaturas se recolocan con animación y las páginas nuevas aparecen con un destello.
