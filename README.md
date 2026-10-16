@@ -13,11 +13,13 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 | `Sources/ucPDF.twin` | El control: visor, herramientas, eventos y propiedades |
 | `Sources/ucPdfSupport.twin` | Enumeraciones públicas, subclasificación y diálogo de impresión |
 | `Sources/GdiPlus.twin` | API plana de GDI+ (`gdiplus.dll` de Windows) para la barra de herramientas |
+| `Sources/PdfFormData.twin` | Datos de formularios: exportar e importar en XFDF, FDF e INI |
 | `Sources/PdfOps.twin` | Operaciones sin interfaz: texto, coordenadas, búsqueda, páginas, imágenes, unir, dividir, imprimir |
 | `Sources/modCommandLine.twin` | `Sub Main` y comandos de línea de comandos |
 | `Sources/Win32Api.twin` | Declaraciones Win32 y utilidades |
 | `Sources/PdfTests.twin` | Pruebas automáticas para Win32/Win64 |
 | `samples/sample.pdf` | PDF de 2 páginas que usan las pruebas |
+| `samples/formulario.pdf` | Formulario de prueba: texto, casilla, radios, combo, lista múltiple, multilínea y solo lectura |
 
 > Los archivos `.twin` usan `\r` (CR) como salto de línea. `.gitattributes` evita que git los convierta.
 
@@ -97,7 +99,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
 
 ```
-[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar] [zonas]
+[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar] [zonas] [formulario]
 ```
 
 | Grupo | Elementos |
@@ -109,6 +111,7 @@ La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redond
 | Impresión | Abre el diálogo de impresión |
 | Organizar | Vista de miniaturas para reordenar páginas arrastrándolas (ver abajo) |
 | Zonas | Herramienta rectángulo para marcar zonas con nombre y guardarlas en un INI (ver abajo) |
+| Formulario | Panel con los campos del formulario y los botones Exportar / Importar. Solo se activa si el PDF tiene formulario |
 
 ### Panel de búsqueda
 
@@ -338,6 +341,79 @@ Debug.Print ucPDF1.ExtractAreasText()          ' NumFactura=F-2026/0153 ...
 
 Sin interfaz, `PdfOps` ofrece `WriteAreasIni`, `ReadAreasIni` y `AreasText(doc, ini)`. Desde la línea de comandos se usa `areas` (ver más abajo).
 
+## Formularios
+
+Si el PDF tiene un formulario (AcroForm), sus campos se dibujan y se rellenan directamente sobre la página, como en Acrobat.
+
+> PDFium solo dibuja los campos con su entorno de formularios (`FPDFDOC_InitFormFillEnvironment` + `FPDF_FFLDraw`). `PdfDocument` lo crea al abrir cualquier PDF con formulario. Antes de este cambio los campos no se veían.
+
+**Rellenar con el ratón y el teclado:**
+- Clic en un campo para escribir. Los campos se resaltan en azul claro (`FormHighlight`, `FormHighlightColor`); el resaltado no se imprime.
+- Tipos admitidos: texto, multilínea, casillas, radios, combos y listas, incluida la selección múltiple.
+- Teclas:
+  - Tab y Mayús+Tab pasan al campo siguiente o al anterior.
+  - Intro confirma un campo de una línea. En uno multilínea inserta un salto.
+  - Esc confirma el campo y quita el foco.
+  - Ctrl+A, Ctrl+C, Ctrl+X y Ctrl+V seleccionan, copian, cortan y pegan dentro del campo.
+  - Ctrl+Z y Ctrl+Y deshacen o rehacen lo escrito en el campo.
+- **Historial:** cada campo confirmado es un paso del historial. Fuera de un campo, Ctrl+Z y Ctrl+Y deshacen y rehacen los cambios del formulario, sin límite de pasos.
+- **Guardar:** los valores se guardan con el botón **Guardar** (o `SaveAs`). El aviso de cambios sin guardar también los tiene en cuenta.
+- **Desactivar la edición:** `FormFilling = False` deja los campos visibles pero no editables.
+
+**Panel Formulario** (botón de la barra o `ShowFormPanel = True`):
+- Lista cada campo con su nombre (`*` si es obligatorio), tipo, página y valor actual. Al hacer clic en uno, la vista va al campo y le da el foco.
+- **Exportar...** guarda los valores. **Importar...** los carga e informa de los campos que no existen y de los valores no válidos.
+
+**Formatos de datos** (se eligen por la extensión):
+
+| Formato | Para qué |
+|---|---|
+| `.xfdf` | XML de Adobe. Acrobat lo importa y lo exporta. Los nombres `a.b` se escriben como `<field>` anidados |
+| `.fdf` | Forms Data Format de Adobe, con cadenas UTF-16 y `/Kids` para los nombres jerárquicos. Se leen cadenas literales, hexadecimales y nombres |
+| `.ini` | `[Campos]` y una línea `Nombre=Valor` por campo. Es fácil de generar desde otro programa. Los saltos de línea se escriben `\n` y la barra `\\` |
+
+Los valores siguen estas reglas:
+- **Texto, combo y lista simple:** el valor tal cual.
+- **Lista múltiple:** las opciones separadas por `|`, por ejemplo `en|de`.
+- **Casilla:** su valor de exportación (normalmente `Yes`) u `Off`. Al importar también se acepta `Si`, `1`, `true` o `X`.
+- **Radio:** el valor de exportación de la opción elegida.
+- **Al importar:** los campos de solo lectura y los que ya tienen ese valor no se tocan.
+
+```ini
+[Campos]
+nombre=José Pérez
+acepto=Yes
+sexo=M
+pais=Portugal
+idiomas=en|de
+comentarios=línea 1\nlínea 2
+```
+
+```vb
+Debug.Print ucPDF1.HasForm, ucPDF1.FormFieldCount
+ucPDF1.SetFieldValue "nombre", "José Pérez"
+ucPDF1.SetFieldValue "acepto", "Yes"
+Debug.Print ucPDF1.GetFieldValue("pais")
+ucPDF1.ExportFormData "C:\datos\cliente.xfdf"
+ucPDF1.ImportFormData "C:\datos\cliente.ini"
+ucPDF1.SaveAs "C:\datos\cliente_relleno.pdf"
+```
+
+| Miembro | Descripción |
+|---|---|
+| `HasForm`, `FormFieldCount` | ¿Hay formulario? ¿Cuántos campos? |
+| `FormFieldName(i)`, `FormFieldType(i)`, `FormFieldTypeName(i)`, `FormFieldPage(i)`, `FormFieldOptions(i)`, `FormFieldReadOnly(i)`, `FormFieldRequired(i)`, `FindFormField(nombre)` | Consulta (índice base 0, página base 1; tipos: 1 botón, 2 casilla, 3 radio, 4 combo, 5 lista, 6 texto, 7 firma) |
+| `GetFieldValue(nombre)`, `SetFieldValue(nombre, valor)` | Leer y escribir valores |
+| `ExportFormData(archivo, [formato])`, `ImportFormData(archivo, [formato], [informe])` | Exportar e importar. Devuelven cuántos campos (-1 si falla) |
+| `ShowExportFormDialog`, `ShowImportFormDialog` | Lo mismo con cuadro de diálogo. Propone `<pdf>.xfdf` en la carpeta del PDF |
+| `GoToFormField(i)` | Lleva la vista al campo y le da el foco |
+| `FormFieldsText()` | Lista de campos: `Nombre⇥Tipo⇥Página⇥Valor⇥Opciones⇥Indicadores` |
+| `FlattenForm()` | Aplana: los valores pasan a ser contenido fijo de la página (se puede deshacer). También aplana las demás anotaciones |
+| `FormFilling`, `FormHighlight`, `FormHighlightColor`, `ShowFormPanel` | Propiedades (las tres primeras, también en diseño) |
+| Evento `FormChanged` | Un valor ha cambiado: al confirmar un campo, marcar una casilla, importar… |
+
+Sin interfaz, `PdfDocument` ofrece `FieldCount`, `FieldName`, `FieldValue`, `SetFieldValue`, `FieldOptions`, `FindField` y `FlattenForms`. `PdfFormData` ofrece `ExportFormData`, `ImportFormData`, `ReadFormData`, `ApplyFormValues` y `FormFieldsReport`.
+
 ## API completa y línea de comandos
 
 Todas las funciones están en **tres capas**:
@@ -389,6 +465,11 @@ programa.exe info      factura.pdf
 programa.exe text      factura.pdf factura.txt --pages 1-2 --encoding utf8
 programa.exe textrect  factura.pdf total.txt --page 1 --rect 120,240,190,252 --units mm
 programa.exe areas     factura.pdf factura_zonas.ini datos.txt --format ini
+programa.exe fields     solicitud.pdf campos.txt
+programa.exe formexport solicitud_rellena.pdf datos.xfdf
+programa.exe formimport solicitud.pdf datos.ini rellena.pdf --flatten
+programa.exe fill      solicitud.pdf rellena.pdf nombre="Ana Ruiz" acepto=Yes idiomas="en|de"
+programa.exe flatten   rellena.pdf definitiva.pdf
 programa.exe search    contrato.pdf "importe total" --out resultados.txt
 programa.exe extract   in.pdf out.pdf --pages 1-3,7
 programa.exe delete    in.pdf out.pdf --pages 2,4
@@ -409,7 +490,7 @@ programa.exe help
 **Opciones generales:** `--password`, `--pdfium <ruta>` y `--quiet` (o `-q`, que solo deja salir errores y resultados).
 - **Formatos:** las opciones admiten `--nombre valor` y `--nombre=valor`, y las rutas con espacios van entre comillas.
 - **Archivo de salida:** puede ser el mismo de entrada, porque el PDF se lee entero a memoria antes de escribir.
-- **Sin archivo de salida:** en `text`, `textrect`, `areas` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
+- **Sin archivo de salida:** en `text`, `textrect`, `areas`, `fields` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
 
 **Códigos de salida:**
 
@@ -420,7 +501,7 @@ programa.exe help
 | 2 | No se pudo abrir un archivo |
 | 3 | La operación falló |
 | 4 | PDFium no disponible |
-| 5 | Sin resultados (`search`) o INI sin zonas (`areas`) |
+| 5 | Sin resultados (`search`), INI sin zonas (`areas`), PDF sin formulario o ningún campo asignado (`fields`, `formexport`, `formimport`, `fill`) |
 
 > Si el EXE es de subsistema Windows (lo normal en twinBASIC), CMD no espera a que termine. Para ver la salida y el código usa `start /wait programa.exe …` o compílalo como aplicación de consola. Desde un `.bat`, PowerShell o un programa que lo lance y espere, funciona directamente.
 
@@ -463,4 +544,7 @@ End Sub
 | Ctrl + rueda | Zoom en el punto del cursor |
 | Ctrl+A / Ctrl+C | Seleccionar todo / copiar |
 | F3 / Mayús+F3 | Siguiente / anterior coincidencia |
+| Tab / Mayús+Tab (formulario) | Campo siguiente / anterior |
+| Intro / Esc (formulario) | Confirmar el campo (Intro en multilínea: salto de línea) |
+| Ctrl+Z / Ctrl+Y (vista normal) | Deshacer / rehacer cambios del formulario |
 | Supr / F2 / Esc / flechas (zonas) | Borrar, renombrar, deseleccionar o salir, mover 1 pt (10 con Mayús) |
