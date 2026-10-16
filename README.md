@@ -19,6 +19,7 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 | `Sources/Win32Api.twin` | Declaraciones Win32 y utilidades |
 | `Sources/PdfTests.twin` | Pruebas automáticas para Win32/Win64 |
 | `samples/sample.pdf` | PDF de 2 páginas que usan las pruebas |
+| `samples/marcadores.pdf` | PDF de 3 páginas con marcadores anidados (uno plegado) |
 | `samples/formulario.pdf` | Formulario de prueba: texto, casilla, radios, combo, lista múltiple, multilínea y solo lectura |
 
 > Los archivos `.twin` usan `\r` (CR) como salto de línea. `.gitattributes` evita que git los convierta.
@@ -99,13 +100,13 @@ Lo dibuja todo con GDI y doble búfer, sin controles hijos, y funciona en **Win3
 La barra se dibuja con **GDI+**: iconos vectoriales con antialias, fondos redondeados y texto. Solo usa `gdiplus.dll`, que viene con Windows, sin dependencias de terceros. Se muestra u oculta con la propiedad `ShowToolbar`.
 
 ```
-[abrir] [guardar] | [miniaturas] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar] [zonas] [formulario]
+[abrir] [guardar] | [miniaturas] [marcadores] [buscar] | [|<] [<] [ 3 / 10 ] [>] [>|] | [-] [ 100 % ] [+] [|<->|] [ajustar página] | [imprimir] [organizar] [zonas] [formulario]
 ```
 
 | Grupo | Elementos |
 |---|---|
 | Archivo | **Abrir** y **Guardar** con el cuadro de diálogo de Windows. Se ocultan desde código con `ShowOpenButton` / `ShowSaveButton` |
-| Paneles | Miniaturas y búsqueda. Abren un panel a la izquierda; son excluyentes y el botón activo queda resaltado |
+| Paneles | Miniaturas, marcadores y búsqueda. Abren un panel a la izquierda; son excluyentes y el botón activo queda resaltado |
 | Páginas | Primera, anterior, etiqueta «página / total», siguiente, última |
 | Zoom | `−`, zoom actual y `+` en tramos de 25 % (110 % → 125 % / 100 %); **ajustar al ancho** y **ajustar página**, resaltados cuando su modo está activo |
 | Impresión | Abre el diálogo de impresión |
@@ -341,6 +342,25 @@ Debug.Print ucPDF1.ExtractAreasText()          ' NumFactura=F-2026/0153 ...
 
 Sin interfaz, `PdfOps` ofrece `WriteAreasIni`, `ReadAreasIni` y `AreasText(doc, ini)`. Desde la línea de comandos se usa `areas` (ver más abajo).
 
+## Marcadores
+
+El botón **Marcadores**, junto al de miniaturas (o `ShowBookmarksPanel = True`), abre el esquema del documento en el panel izquierdo:
+- **Árbol:** los marcadores aparecen sangrados por nivel, con su página a la derecha. Los de nivel superior van en negrita.
+- **Desplegar:** el triángulo despliega o pliega un nivel; el doble clic también. **Expandir todo** y **Contraer todo** actúan sobre el árbol entero. Al abrir el PDF se respeta el estado desplegado o plegado que guarda el documento.
+- **Ir:** clic en un título para ir a su destino. Si el destino indica una posición, esa línea queda arriba de la vista; si no, se va al principio de la página.
+- **Enlaces web:** los marcadores con enlace web abren el navegador (solo `http`, `https` y `mailto`).
+- **Sección actual:** una barra de color marca la sección que se está leyendo, es decir, el último marcador cuya página es la actual o anterior.
+
+| Miembro | Descripción |
+|---|---|
+| `ShowBookmarksPanel` | Muestra u oculta el panel |
+| `BookmarkCount`, `BookmarkTitle(i)`, `BookmarkLevel(i)`, `BookmarkPage(i)`, `BookmarkUri(i)` | Consulta (índice base 0 en orden de lectura; nivel 0 = superior; página base 1, 0 si no tiene) |
+| `GoToBookmark(i)`, `ExpandAllBookmarks`, `CollapseAllBookmarks` | Navegación |
+| `BookmarksText()` | Esquema como texto: una línea por marcador, sangrada por nivel, con tabulador y página |
+| Evento `BookmarkClick(Index, Title, Page, Cancel)` | Antes de navegar. `Cancel = True` lo impide |
+
+Sin interfaz, `PdfDocument` ofrece `BookmarkCount`, `BookmarkTitle`, `BookmarkLevel`, `BookmarkPage`, `BookmarkTopPt` (posición desde arriba, en puntos) y `BookmarkUri`. `PdfOps.BookmarksReport` devuelve el esquema como texto.
+
 ## Formularios
 
 Si el PDF tiene un formulario (AcroForm), sus campos se dibujan y se rellenan directamente sobre la página, como en Acrobat.
@@ -465,6 +485,7 @@ programa.exe info      factura.pdf
 programa.exe text      factura.pdf factura.txt --pages 1-2 --encoding utf8
 programa.exe textrect  factura.pdf total.txt --page 1 --rect 120,240,190,252 --units mm
 programa.exe areas     factura.pdf factura_zonas.ini datos.txt --format ini
+programa.exe bookmarks  manual.pdf indice.txt
 programa.exe fields     solicitud.pdf campos.txt
 programa.exe formexport solicitud_rellena.pdf datos.xfdf
 programa.exe formimport solicitud.pdf datos.ini rellena.pdf --flatten
@@ -490,7 +511,7 @@ programa.exe help
 **Opciones generales:** `--password`, `--pdfium <ruta>` y `--quiet` (o `-q`, que solo deja salir errores y resultados).
 - **Formatos:** las opciones admiten `--nombre valor` y `--nombre=valor`, y las rutas con espacios van entre comillas.
 - **Archivo de salida:** puede ser el mismo de entrada, porque el PDF se lee entero a memoria antes de escribir.
-- **Sin archivo de salida:** en `text`, `textrect`, `areas`, `fields` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
+- **Sin archivo de salida:** en `text`, `textrect`, `areas`, `bookmarks`, `fields` y `search` el resultado sale por la salida estándar; si se redirige (`> archivo`), se escribe en UTF-8.
 
 **Códigos de salida:**
 
@@ -501,7 +522,7 @@ programa.exe help
 | 2 | No se pudo abrir un archivo |
 | 3 | La operación falló |
 | 4 | PDFium no disponible |
-| 5 | Sin resultados (`search`), INI sin zonas (`areas`), PDF sin formulario o ningún campo asignado (`fields`, `formexport`, `formimport`, `fill`) |
+| 5 | Sin resultados (`search`), INI sin zonas (`areas`), PDF sin marcadores (`bookmarks`), PDF sin formulario o ningún campo asignado (`fields`, `formexport`, `formimport`, `fill`) |
 
 > Si el EXE es de subsistema Windows (lo normal en twinBASIC), CMD no espera a que termine. Para ver la salida y el código usa `start /wait programa.exe …` o compílalo como aplicación de consola. Desde un `.bat`, PowerShell o un programa que lo lance y espere, funciona directamente.
 
